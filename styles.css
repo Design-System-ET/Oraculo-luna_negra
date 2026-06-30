@@ -231,6 +231,7 @@ button, .btn-primary, .btn-ghost {
   border: 1px solid rgba(217,199,163,0.2);
   border-radius: 4px;
 }
+#screen-shuffle .btn-primary { margin-top: 20px; }
 .q-label { display: block; font-family: var(--serif-d); font-size: 11px; letter-spacing: 4px; color: var(--gold); margin-bottom: 10px; }
 #userQuestion {
   width: 100%;
