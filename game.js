@@ -306,10 +306,15 @@
 
   $('#questionsContinue').addEventListener('click', () => {
     show(screens.shuffle);
-    setTimeout(() => animateShuffle(), 50);
+    // foco en la pregunta despuès de la transición
+    setTimeout(() => { try { $('#userQuestion').focus({ preventScroll: true }); } catch (_) {} }, 700);
+    // dame un toque para montar el DOM
+    requestAnimationFrame(() => animateShuffle());
   });
 
-  /* ============== Barajado animado ============== */
+  /* ============== Barajado animado (loop, hasta que el usuario continúe) ============== */
+  let shufflePhrasesInterval = null;
+  let shuffleAnimInterval = null;
   function animateShuffle() {
     const deck = $('#shuffleDeck');
     deck.innerHTML = '';
@@ -327,12 +332,30 @@
       'Pidiendo guía a la luna.',
       'Acomodando oros, copas, espadas y bastos.',
       'Mezclando destinos…',
+      'Esperando que cierres tu pregunta cuando quieras.',
     ];
     let p = 0;
     const line = $('#shuffleLine');
     line.textContent = phrases[0];
-    const id = setInterval(() => { p = (p + 1) % phrases.length; line.textContent = phrases[p]; }, 1400);
-    setTimeout(() => { clearInterval(id); goDraw(); }, 4200);
+    shufflePhrasesInterval = setInterval(() => {
+      p = (p + 1) % phrases.length;
+      line.textContent = phrases[p];
+    }, 1400);
+    // loop suave de animación de cartas hasta que el usuario haga click
+    shuffleAnimInterval = setInterval(() => {
+      const cards = deck.querySelectorAll('.scard');
+      if (!cards.length) return;
+      const i = Math.floor(Math.random() * cards.length);
+      const c = cards[i];
+      const rot = (Math.random() * 6 - 3).toFixed(1);
+      const ty = (Math.random() * 4 - 2).toFixed(1);
+      c.style.transform = `rotate(${rot}deg) translateY(${ty}px)`;
+    }, 220);
+  }
+
+  function stopShuffle() {
+    if (shufflePhrasesInterval) { clearInterval(shufflePhrasesInterval); shufflePhrasesInterval = null; }
+    if (shuffleAnimInterval) { clearInterval(shuffleAnimInterval); shuffleAnimInterval = null; }
   }
 
   /* ============== goDraw ============== */
@@ -454,6 +477,7 @@
       show(screens.topic);
     }
     if (a === 'share-reading') shareReading();
+    if (a === 'continue-shuffle') { stopShuffle(); goDraw(); }
   });
 
   /* ============== Lectura ============== */
@@ -627,43 +651,315 @@
     }
   }
 
-  /* ============== Audio ============== */
-  const audio = { ctx: null, on: false, master: null, nodes: null };
-  async function toggleSound() {
-    const icon = document.querySelector('.sound-icon');
-    if (!audio.on) {
-      try {
-        audio.ctx = audio.ctx || new (window.AudioContext || window.webkitAudioContext)();
-        await audio.ctx.resume();
-        const ctx = audio.ctx;
-        audio.master = ctx.createGain();
-        audio.master.gain.value = 0;
-        audio.master.connect(ctx.destination);
-        const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 110;
-        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 138.59;
-        const o3 = ctx.createOscillator(); o3.type = 'triangle'; o3.frequency.value = 220;
-        const g = ctx.createGain(); g.gain.value = 0.05;
-        o1.connect(g); o2.connect(g); o3.connect(g);
-        g.connect(audio.master);
-        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.1;
-        const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.04;
-        lfo.connect(lfoGain); lfoGain.connect(audio.master.gain);
-        audio.master.gain.setTargetAtTime(1.0, ctx.currentTime, 2);
-        [o1, o2, o3, lfo].forEach(o => o.start());
-        audio.nodes = [o1, o2, o3, lfo, g];
-        audio.on = true;
-        icon.textContent = '🔊';
-      } catch (e) {}
+  /* ============== Audio: ambient de selva (jungle) con animales generados por WebAudio ============== */
+  const audio = {
+    ctx: null, on: false, master: null,
+    nodes: [],
+    intervalIds: [],
+    timeouts: [],
+  };
+
+  // Generador de buffers de ruido curados.
+  function makeNoiseBuffer(ctx, type, seconds) {
+    const len = ctx.sampleRate * seconds;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    if (type === 'pink') {
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < len; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+      }
+    } else if (type === 'brown') {
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        const white = Math.random() * 2 - 1;
+        last = (last + 0.02 * white) / 1.02;
+        d[i] = last * 3.5;
+      }
     } else {
-      const now = audio.ctx.currentTime;
-      audio.master.gain.cancelScheduledValues(now);
-      audio.master.gain.setTargetAtTime(0, now, 0.4);
-      setTimeout(() => { if (audio.nodes) audio.nodes.forEach(n => { try { n.stop(); } catch (_) {} }); audio.nodes = null; }, 800);
-      audio.on = false;
-      icon.textContent = '🔇';
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return buf;
+  }
+
+  // ---------- SINTETIZADORES DE ANIMALES ----------
+  // Pájaro: chirrido agudo oscilante, 60-200 ms.
+  function birdChirp(ctx, when, baseFreq) {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = baseFreq;
+    const g = ctx.createGain();
+    const peak = 0.25 + Math.random() * 0.25;
+    g.gain.value = 0;
+    g.gain.setValueAtTime(0, ctx.currentTime + when);
+    g.gain.linearRampToValueAtTime(peak, ctx.currentTime + when + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + 0.18);
+    // pequeños modulantes de frecuencia para que no suene a pitido puro
+    o.frequency.setValueAtTime(baseFreq, ctx.currentTime + when);
+    o.frequency.linearRampToValueAtTime(baseFreq * (1 + Math.random() * 0.4 - 0.2), ctx.currentTime + when + 0.18);
+    o.connect(g).connect(audio.master);
+    o.start(ctx.currentTime + when);
+    o.stop(ctx.currentTime + when + 0.25);
+  }
+  // Secuencia rápida de 3-5 chirridos = trino de pájaro.
+  function birdSong(ctx, when) {
+    const n = 3 + Math.floor(Math.random() * 4);
+    let base = 2200 + Math.random() * 2400;
+    for (let i = 0; i < n; i++) {
+      birdChirp(ctx, when + i * 0.13 + Math.random() * 0.04, base + Math.random() * 800);
     }
   }
-  document.getElementById('soundToggle').addEventListener('click', toggleSound);
+
+  // Cigarra: tren de pulsos a ~4-6 kHz con dientes marcados.
+  function cicadaBurst(ctx, when) {
+    const dur = 1.5 + Math.random() * 2.5;
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 4500 + Math.random() * 1500;
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 7000;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    // modulación de tremolo en ganancia para el efecto pulsante
+    const trem = ctx.createOscillator(); trem.type = 'sine'; trem.frequency.value = 60 + Math.random() * 60;
+    const tremG = ctx.createGain(); tremG.gain.value = 0.04;
+    trem.connect(tremG).connect(g.gain);
+    g.gain.setValueAtTime(0, ctx.currentTime + when);
+    g.gain.linearRampToValueAtTime(0.06, ctx.currentTime + when + 0.2);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur);
+    o.connect(lpf).connect(g).connect(audio.master);
+    o.start(ctx.currentTime + when);
+    trem.start(ctx.currentTime + when);
+    o.stop(ctx.currentTime + when + dur + 0.2);
+    trem.stop(ctx.currentTime + when + dur + 0.2);
+  }
+
+  // Mono aullador: aullido grave con vibrato (~150-300 Hz, varios segundos).
+  function howlerMonkey(ctx, when) {
+    const dur = 2.5 + Math.random() * 2;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    const base = 150 + Math.random() * 60;
+    o.frequency.setValueAtTime(base, ctx.currentTime + when);
+    o.frequency.linearRampToValueAtTime(base * 0.85, ctx.currentTime + when + dur * 0.7);
+    // vibrato
+    const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 4 + Math.random() * 3;
+    const vibG = ctx.createGain(); vibG.gain.value = 8;
+    vib.connect(vibG).connect(o.frequency);
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 600;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.gain.setValueAtTime(0, ctx.currentTime + when);
+    g.gain.linearRampToValueAtTime(0.22, ctx.currentTime + when + 0.4);
+    g.gain.setValueAtTime(0.22, ctx.currentTime + when + dur - 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur);
+    o.connect(lpf).connect(g).connect(audio.master);
+    o.start(ctx.currentTime + when);
+    vib.start(ctx.currentTime + when);
+    o.stop(ctx.currentTime + when + dur + 0.5);
+    vib.stop(ctx.currentTime + when + dur + 0.5);
+  }
+
+  // Rana: croak bajo (300-500 Hz) con dos picos.
+  function frogCroak(ctx, when) {
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 320 + Math.random() * 120;
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 800;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.gain.setValueAtTime(0, ctx.currentTime + when);
+    g.gain.linearRampToValueAtTime(0.14, ctx.currentTime + when + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + 0.18);
+    o.connect(lpf).connect(g).connect(audio.master);
+    o.start(ctx.currentTime + when);
+    o.stop(ctx.currentTime + when + 0.25);
+    // eco / segundo croak
+    frogCroak(ctx, when + 0.22);
+  }
+
+  // Búho / lechuza: gruñido con dos tonos graves descendentes.
+  function owlHoots(ctx, when) {
+    for (let i = 0; i < 2; i++) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      const f = 280 + Math.random() * 80;
+      o.frequency.setValueAtTime(f, ctx.currentTime + when + i * 0.7);
+      o.frequency.exponentialRampToValueAtTime(f * 0.7, ctx.currentTime + when + i * 0.7 + 0.4);
+      const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 900;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      g.gain.setValueAtTime(0, ctx.currentTime + when + i * 0.7);
+      g.gain.linearRampToValueAtTime(0.16, ctx.currentTime + when + i * 0.7 + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + i * 0.7 + 0.45);
+      o.connect(lpf).connect(g).connect(audio.master);
+      o.start(ctx.currentTime + when + i * 0.7);
+      o.stop(ctx.currentTime + when + i * 0.7 + 0.6);
+    }
+  }
+
+  // Insecto genérico: zumbido fino a 3-5 kHz.
+  function insectBuzz(ctx, when) {
+    const dur = 0.3 + Math.random() * 0.5;
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 3000 + Math.random() * 2500;
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 5500;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.05, ctx.currentTime + when + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur);
+    o.connect(lpf).connect(g).connect(audio.master);
+    o.start(ctx.currentTime + when);
+    o.stop(ctx.currentTime + when + dur + 0.1);
+  }
+
+  // Trueno lejano muy distinto al de tormenta (más seco, tipo selva).
+  function distantThunder(ctx, when) {
+    const buf = makeNoiseBuffer(ctx, 'brown', 1.5);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 250;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.35, ctx.currentTime + when + 0.2);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + 2.5);
+    src.connect(lpf).connect(g).connect(audio.master);
+    src.start(ctx.currentTime + when);
+    src.stop(ctx.currentTime + when + 3);
+  }
+
+  async function startJungle() {
+    if (audio.on) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audio.ctx = audio.ctx || new AC();
+      const ctx = audio.ctx;
+      if (ctx.state === 'suspended') await ctx.resume();
+      const master = ctx.createGain();
+      master.gain.value = 0;
+      master.connect(ctx.destination);
+
+      // --------- RUMOR DE LA SELVA: brown noise filtrado muy grave ---------
+      const humBuf = makeNoiseBuffer(ctx, 'brown', 6);
+      const hum = ctx.createBufferSource(); hum.buffer = humBuf; hum.loop = true;
+      const humLP = ctx.createBiquadFilter(); humLP.type = 'lowpass'; humLP.frequency.value = 450;
+      const humGain = ctx.createGain(); humGain.gain.value = 0.6;
+      hum.connect(humLP).connect(humGain).connect(master);
+      hum.start();
+
+      // --------- VIENTO EN COPA DE ÁRBOLES ---------
+      const windBuf = makeNoiseBuffer(ctx, 'pink', 8);
+      const wind = ctx.createBufferSource(); wind.buffer = windBuf; wind.loop = true;
+      const windFilt = ctx.createBiquadFilter(); windFilt.type = 'bandpass'; windFilt.frequency.value = 900; windFilt.Q.value = 3;
+      const windGain = ctx.createGain(); windGain.gain.value = 0.18;
+      wind.connect(windFilt).connect(windGain).connect(master);
+      wind.start();
+      const windLfo = ctx.createOscillator(); windLfo.type = 'sine'; windLfo.frequency.value = 0.13;
+      const windLfoG = ctx.createGain(); windLfoG.gain.value = 700;
+      windLfo.connect(windLfoG).connect(windFilt.frequency);
+      windLfo.start();
+      const windVolLfo = ctx.createOscillator(); windVolLfo.type = 'sine'; windVolLfo.frequency.value = 0.07;
+      const windVolG = ctx.createGain(); windVolG.gain.value = 0.08;
+      windVolLfo.connect(windVolG).connect(windGain.gain);
+      windVolLfo.start();
+
+      // --------- FOLLAJE: noise muy agudo tenue ---------
+      const leafBuf = makeNoiseBuffer(ctx, 'pink', 8);
+      const leaf = ctx.createBufferSource(); leaf.buffer = leafBuf; leaf.loop = true;
+      const leafFilt = ctx.createBiquadFilter(); leafFilt.type = 'highpass'; leafFilt.frequency.value = 4000;
+      const leafGain = ctx.createGain(); leafGain.gain.value = 0.04;
+      leaf.connect(leafFilt).connect(leafGain).connect(master);
+      leaf.start();
+
+      // --------- LOOP DE ANIMALES ---------
+      // Pájaros (trinos) cada 4-9 s
+      const birdLoop = setInterval(() => {
+        birdSong(ctx, Math.random() * 0.2);
+      }, 4500 + Math.random() * 4500);
+      audio.intervalIds.push(birdLoop);
+
+      // Cigarras cada 9-14 s
+      const cicadaLoop = setInterval(() => {
+        cicadaBurst(ctx, Math.random() * 0.3);
+      }, 9000 + Math.random() * 5000);
+      audio.intervalIds.push(cicadaLoop);
+
+      // Monos aulladores cada 30-50 s
+      const monkeyLoop = setInterval(() => {
+        howlerMonkey(ctx, Math.random() * 0.5);
+      }, 30000 + Math.random() * 20000);
+      audio.intervalIds.push(monkeyLoop);
+
+      // Ranas cada 5-8 s
+      const frogLoop = setInterval(() => {
+        frogCroak(ctx, Math.random() * 0.1);
+      }, 5000 + Math.random() * 3000);
+      audio.intervalIds.push(frogLoop);
+
+      // Búhos cada 22-40 s
+      const owlLoop = setInterval(() => {
+        owlHoots(ctx, Math.random() * 0.4);
+      }, 22000 + Math.random() * 18000);
+      audio.intervalIds.push(owlLoop);
+
+      // Insectos varios cada 3-6 s
+      const insectLoop = setInterval(() => {
+        insectBuzz(ctx, Math.random() * 0.2);
+      }, 3000 + Math.random() * 3000);
+      audio.intervalIds.push(insectLoop);
+
+      // Trueno lejano cada 60-120 s (de vez en cuando)
+      const thunderLoop = setInterval(() => {
+        if (Math.random() < 0.6) distantThunder(ctx, Math.random() * 0.4);
+      }, 90000);
+      audio.intervalIds.push(thunderLoop);
+
+      // fade-in
+      master.gain.setTargetAtTime(0.85, ctx.currentTime, 2.5);
+
+      audio.master = master;
+      audio.nodes = [
+        hum, humLP, humGain,
+        wind, windFilt, windGain, windLfo, windLfoG, windVolLfo, windVolG,
+        leaf, leafFilt, leafGain,
+        master,
+      ];
+      audio.on = true;
+      const icon = document.querySelector('.sound-icon');
+      if (icon) icon.textContent = '🔊';
+    } catch (e) {}
+  }
+
+  function stopJungle() {
+    if (!audio.on) return;
+    const ctx = audio.ctx;
+    const now = ctx.currentTime;
+    audio.master.gain.cancelScheduledValues(now);
+    audio.master.gain.setTargetAtTime(0, now, 0.8);
+    audio.intervalIds.forEach((id) => clearInterval(id));
+    audio.intervalIds = [];
+    audio.timeouts.forEach((t) => clearTimeout(t));
+    audio.timeouts = [];
+    setTimeout(() => {
+      audio.nodes.forEach((n) => { try { n.stop && n.stop(); } catch (_) {} });
+      audio.nodes = [];
+    }, 1400);
+    audio.on = false;
+    const icon = document.querySelector('.sound-icon');
+    if (icon) icon.textContent = '🔇';
+  }
+
+  async function toggleSound() {
+    if (audio.on) stopJungle();
+    else await startJungle();
+  }
+
+  // Auto-arranque en el primer click del usuario (los navegadores exigen interacción).
+  document.addEventListener('pointerdown', async () => {
+    if (!audio.on) await startJungle();
+  });
+
+  document.getElementById('soundToggle').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (audio.on) toggleSound();
+  });
 
   /* ============== Init ============== */
   spawnAmbient();
