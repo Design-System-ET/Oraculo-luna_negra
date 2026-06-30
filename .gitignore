@@ -1,0 +1,26 @@
+# OS
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.user
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies (none currently, but for future use)
+node_modules/
+bower_components/
+
+# Env
+.env
+.env.local
