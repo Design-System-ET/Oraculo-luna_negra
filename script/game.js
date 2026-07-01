@@ -659,23 +659,27 @@
     }
   }
 
-  /* ============== Audio: inicia con el primer toque/click ============== */
+  /* ============== Audio: unlock iOS + primer gesto ============== */
   const bgAudio = document.getElementById('bgAudio');
   if (bgAudio) {
     bgAudio.volume = 0.80;
 
     const startAudio = () => {
-      if (bgAudio.paused) {
-        bgAudio.play().catch(() => {});
-      }
+      if (!bgAudio.paused) return;
+
+      // iOS unlock: crear/resumir AudioContext desbloquea el motor de audio
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+        ctx.close();
+      } catch (_) {}
+
+      bgAudio.play().catch(() => {});
     };
 
+    // Cualquier click/tap en la página (primer gesto del usuario)
+    document.addEventListener('click', startAudio, { once: true });
     document.addEventListener('touchstart', startAudio, { once: true });
-
-    const nameBtn = document.getElementById('nameContinue');
-    if (nameBtn) {
-      nameBtn.addEventListener('click', startAudio, { once: true });
-    }
   }
 
   /* ============== Init ============== */
