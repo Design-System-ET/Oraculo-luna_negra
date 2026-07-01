@@ -8,12 +8,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+
+  <!--Bootstrap Icons-->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
   <div id="particles" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
-  <button id="soundToggle" class="sound-toggle" aria-label="Activar sonido ambiente" title="Sonido"><span class="sound-icon">🔇</span></button>
+
+  <!-- Audio loop: ambient de selva, arranca solo -->
+  <audio id="bgAudio" src="audio/forest2.mp3" loop preload="auto" autoplay playsinline></audio>
 
   <main id="game" class="game">
 
@@ -147,6 +156,7 @@
             <a class="btn-primary" href="https://api.whatsapp.com/send?phone=59898582316&text=Buenas%2C%20me%20gustar%C3%ADa%20hacer%20una%20consulta..." target="_blank" rel="noopener">Agendar lectura</a>
             <button class="btn-ghost" data-action="replay">Nueva tirada</button>
             <button class="btn-ghost" data-action="share-reading">Compartir lectura</button>
+            <button class="btn-ghost" data-action="back-home">⟵ Volver al inicio</button>
           </div>
         </div>
         <div class="reading-tip" id="readingTip"></div>
@@ -155,7 +165,51 @@
 
   </main>
 
-  <script src="deck.js"></script>
-  <script src="game.js"></script>
+  <footer class="container-fluid">
+    <div class="container-fluid d-flex justify-content-around align-items-center flex-wrap gap-4">
+
+        <div class="conte">
+            <p class="txt_footer">Contacto</p>
+            
+            <div class="d-flex gap-3">
+                <a href="#" target="_blank"><i class="bi bi-whatsapp fs-4"></i></a>
+                <!--<a href="mailto:jpablorivero432@gmail.com"><i class="bi bi-envelope fs-4"></i></a>-->
+            
+                <a href="#" target="_blank">
+                    <i class="bi bi-envelope fs-4"></i>
+                </a>
+            </div>
+
+        </div>
+
+        <div class="conte">
+            <p class="txt_footer">Social</p>
+
+            <div class="d-flex gap-3">
+                <a href="#"><i class="bi bi-facebook fs-4"></i></a>
+                <a href="#"><i class="bi bi-instagram fs-4"></i></a>
+                <a href="#"><i class="bi bi-linkedin fs-4"></i></a>
+            </div>
+        </div>
+
+        <div class="conte">
+            <!--
+            <p class="txt_footer">Design by</p>
+            -->
+            <div class="ico_content">
+                <img src="/img/logo_50x50.png" alt="" class="img_logo">
+            </div>
+            
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-center align-items-center" >
+            <p class="footer_aling">© 2026 Luna Negra by <a href="">Design System</a> - Todos los derechos reservados.</p>
+    </div>
+    
+</footer>
+
+  <script src="/script/deck.js"></script>
+  <script src="/script/game.js"></script>
 </body>
 </html>

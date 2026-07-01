@@ -171,5 +171,3 @@ Cada carta se despliega con:
 MIT — Ver archivo [LICENSE](LICENSE).
 
 ---
-
-<p align="center"><em>"Las cartas son el mapa; el camino lo trazás vos."</em><br>— Jessica, Oráculo de Luna Negra</p>
