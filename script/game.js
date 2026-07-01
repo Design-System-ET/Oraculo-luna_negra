@@ -659,36 +659,23 @@
     }
   }
 
-  /* ============== Audio: MP3 en loop, autoplay ============== */
+  /* ============== Audio: inicia con el primer toque/click ============== */
   const bgAudio = document.getElementById('bgAudio');
   if (bgAudio) {
     bgAudio.volume = 0.80;
-    // Intentar reproducir al cargar.
-    const tryPlay = () => {
-      bgAudio.muted = false;
-      const p = bgAudio.play();
-      if (p && p.catch) {
-        p.catch(() => {
-          // Si el navegador bloquea autoplay, intentar al primer gesto del usuario.
-          bgAudio.muted = false;
-        });
+
+    const startAudio = () => {
+      if (bgAudio.paused) {
+        bgAudio.play().catch(() => {});
       }
     };
-    // Múltiples intentos por si el navegador requiere user-gesture.
-    tryPlay();
-    document.addEventListener('DOMContentLoaded', tryPlay);
-    window.addEventListener('load', tryPlay);
-    // Fallback definitivo en cuanto el usuario toque la página.
-    const onFirstGesture = () => {
-      bgAudio.muted = false;
-      bgAudio.play().catch(() => {});
-      document.removeEventListener('pointerdown', onFirstGesture);
-      document.removeEventListener('keydown', onFirstGesture);
-      document.removeEventListener('touchstart', onFirstGesture);
-    };
-    document.addEventListener('pointerdown', onFirstGesture, { once: true });
-    document.addEventListener('keydown', onFirstGesture, { once: true });
-    document.addEventListener('touchstart', onFirstGesture, { once: true });
+
+    document.addEventListener('touchstart', startAudio, { once: true });
+
+    const nameBtn = document.getElementById('nameContinue');
+    if (nameBtn) {
+      nameBtn.addEventListener('click', startAudio, { once: true });
+    }
   }
 
   /* ============== Init ============== */
